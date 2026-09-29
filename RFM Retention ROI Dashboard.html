@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>RFM Retention ROI Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#f7f7f8; --card:#ffffff; --text:#1a1a1a; --muted:#666;
+  --border:#e5e5e5; --accent:#2563eb; --good:#16a34a; --bad:#dc2626;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){ --bg:#121212; --card:#1e1e1e; --text:#f0f0f0; --muted:#a0a0a0; --border:#333; }
+}
+:root[data-theme="dark"]{ --bg:#121212; --card:#1e1e1e; --text:#f0f0f0; --muted:#a0a0a0; --border:#333; }
+*{box-sizing:border-box;}
+html,body{margin:0;height:100%;}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:20px;}
+h1{font-size:22px;margin:0 0 4px;}
+.sub{color:var(--muted);font-size:14px;margin-bottom:20px;}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:1000px;margin:0 auto;}
+@media (max-width:700px){.grid{grid-template-columns:1fr;}}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;overflow-x:auto;}
+.card h2{font-size:15px;margin:0 0 10px;}
+.full{grid-column:1/-1;}
+table{border-collapse:collapse;width:100%;font-size:13px;}
+th,td{text-align:right;padding:6px 8px;border-bottom:1px solid var(--border);white-space:nowrap;}
+th:first-child,td:first-child{text-align:left;}
+th{color:var(--muted);font-weight:600;}
+.pos{color:var(--good);} .neg{color:var(--bad);}
+label{font-size:13px;color:var(--muted);display:block;margin-bottom:6px;}
+input[type=range]{width:100%;}
+.budgetval{font-size:20px;font-weight:700;margin:4px 0 12px;}
+canvas{max-height:260px;}
+</style>
+</head>
+<body>
+<h1>Customer Segmentation &amp; Retention ROI</h1>
+<div class="sub">RFM analysis of 5,878 customers — which segments deserve retention budget?</div>
+
+<div class="grid">
+  <div class="card">
+    <h2>Expected ROI by segment (per £ spent)</h2>
+    <canvas id="roiChart"></canvas>
+  </div>
+  <div class="card">
+    <h2>Customers per segment</h2>
+    <canvas id="countChart"></canvas>
+  </div>
+
+  <div class="card full">
+    <h2>Budget allocator</h2>
+    <label for="budget">Total retention budget: <span id="budgetLabel"></span></label>
+    <input type="range" id="budget" min="1000" max="50000" step="500" value="10000">
+    <table id="allocTable">
+      <thead><tr><th>Segment</th><th>Customers</th><th>Avg value</th><th>ROI</th><th>Allocated budget</th><th>% of budget</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const data = [
+ {seg:"Champions",count:661,avgM:14567.99,roi:241.80},
+ {seg:"At Risk (High Value)",count:649,avgM:3210.82,roi:266.57},
+ {seg:"Loyal Customers",count:1398,avgM:2851.95,roi:94.07},
+ {seg:"Cant Lose Them",count:270,avgM:2069.05,roi:136.94},
+ {seg:"New Customers",count:336,avgM:1143.23,roi:37.11},
+ {seg:"Needs Attention",count:558,avgM:691.45,roi:33.57},
+ {seg:"Others",count:231,avgM:596.78,roi:8.95},
+ {seg:"Lost",count:1775,avgM:324.89,roi:4.41}
+];
+const sorted = [...data].sort((a,b)=>b.roi-a.roi);
+const colors = sorted.map(d=>d.roi>=0?'#16a34a':'#dc2626');
+
+new Chart(document.getElementById('roiChart'), {
+  type:'bar',
+  data:{labels:sorted.map(d=>d.seg), datasets:[{data:sorted.map(d=>d.roi), backgroundColor:colors}]},
+  options:{indexAxis:'y', plugins:{legend:{display:false}}, scales:{x:{title:{display:true,text:'ROI multiple'}}}}
+});
+
+new Chart(document.getElementById('countChart'), {
+  type:'doughnut',
+  data:{labels:data.map(d=>d.seg), datasets:[{data:data.map(d=>d.count),
+    backgroundColor:['#2563eb','#16a34a','#f59e0b','#dc2626','#8b5cf6','#06b6d4','#84cc16','#94a3b8']}]},
+  options:{plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:10}}}}}
+});
+
+const budgetEl = document.getElementById('budget');
+const budgetLabel = document.getElementById('budgetLabel');
+const tbody = document.querySelector('#allocTable tbody');
+
+function fmt(n){ return '£' + n.toLocaleString(undefined,{maximumFractionDigits:0}); }
+
+function render(){
+  const total = Number(budgetEl.value);
+  budgetLabel.textContent = fmt(total);
+  // only positive-ROI segments get budget, weighted by roi * count (capacity)
+  const eligible = sorted.filter(d=>d.roi>0);
+  const weightSum = eligible.reduce((s,d)=>s + d.roi*Math.sqrt(d.count),0);
+  tbody.innerHTML = '';
+  sorted.forEach(d=>{
+    const eligible_ = d.roi>0;
+    const weight = eligible_ ? d.roi*Math.sqrt(d.count) : 0;
+    const alloc = eligible_ ? total * weight/weightSum : 0;
+    const pct = eligible_ ? (100*weight/weightSum) : 0;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${d.seg}</td><td>${d.count}</td><td>£${d.avgM.toFixed(0)}</td>
+      <td class="${d.roi>=0?'pos':'neg'}">${d.roi.toFixed(1)}x</td>
+      <td>${fmt(alloc)}</td><td>${pct.toFixed(1)}%</td>`;
+    tbody.appendChild(tr);
+  });
+}
+budgetEl.addEventListener('input', render);
+render();
+</script>
+</body>
+</html>
