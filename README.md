@@ -26,7 +26,7 @@ Python (pandas), Jupyter Notebook, HTML/JavaScript, Chart.js
 - `rfm_dashboard.html` — interactive dashboard with budget allocator
 
 ## Live Dashboard
-[Add your GitHub Pages link here once uploaded]
+   https://manvigupta0027-cyber.github.io/rfm-customer-segmentation/rfm_dashboard.html
 
 ## Limitations
 - Reactivation success rates are estimated assumptions, not measured from an actual A/B test, and should be validated with a real campaign pilot before scaling budget.
